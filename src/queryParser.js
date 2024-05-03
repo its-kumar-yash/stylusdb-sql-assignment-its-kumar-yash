@@ -4,7 +4,7 @@ function parseQuery(query) {
   const whereSplit = query.split(/\sWHERE\s/i);
   query = whereSplit[0];
   const whereClause = whereSplit.length > 1 ? whereSplit[1].trim() : null;
-  const joinSplit = query.split(/\sINNER JOIN\s/i);
+  const joinSplit = query.split(/\s(INNER|LEFT|RIGHT)\s/i);
   selectPart = joinSplit[0].trim();
   const joinPart = joinSplit.length > 1 ? joinSplit[1].trim() : null;
   const selectRegex = /^SELECT\s(.+?)\sFROM\s(.+)/i;
@@ -13,36 +13,20 @@ function parseQuery(query) {
     throw new Error("Invalid SELECT format");
   }
   const [, fields, table] = selectMatch;
-  // Parse the JOIN part if it exists
-  let joinTable = null,
-    joinCondition = null;
-  if (joinPart) {
-    const joinRegex = /^(.+?)\sON\s([\w.]+)\s*=\s*([\w.]+)/i;
-    const joinMatch = joinPart.match(joinRegex);
-    if (!joinMatch) {
-      throw new Error("Invalid JOIN format");
-    }
+  const { joinType, joinTable, joinCondition } = parseJoinClause(query);
 
-    joinTable = joinMatch[1].trim();
-    joinCondition = {
-      left: joinMatch[2].trim(),
-      right: joinMatch[3].trim(),
-    };
-  }
-
-  // Parse the WHERE part if it exists
   let whereClauses = [];
   if (whereClause) {
     whereClauses = parseWhereClause(whereClause);
   }
 
   return {
-    fields: fields.split(",").map((field) => field.trim()),
-    table: table.trim(),
-    whereClauses,
-    joinTable,
-    joinCondition,
-    joinType: null,
+      fields: fields.split(",").map((field) => field.trim()),
+      table: table.trim(),
+      whereClauses,
+      joinTable,
+      joinType,
+      joinCondition,
   };
 }
 

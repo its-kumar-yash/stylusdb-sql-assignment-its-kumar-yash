@@ -2,84 +2,74 @@ const {parseQuery} = require("./queryParser");
 const readCSV = require("./csvReader");
 
 function performInnerJoin(
-  mainData,
+  data,
   joinData,
   joinCondition,
   fields,
-  mainTable
+  table
 ) {
-  return mainData.flatMap((mainRow) => {
-    return joinData
-      .filter((joinRow) => {
+  return data.flatMap((mainRow) => {
+    const matchedJoinRows = joinData.filter((joinRow) => {
         const mainValue = mainRow[joinCondition.left.split(".")[1]];
         const joinValue = joinRow[joinCondition.right.split(".")[1]];
         return mainValue === joinValue;
       })
-      .map((joinRow) => {
+      return matchedJoinRows.map((joinRow) => {
         return fields.reduce((acc, field) => {
           const [tableName, fieldName] = field.split(".");
           acc[field] =
-            tableName === mainTable ? mainRow[fieldName] : joinRow[fieldName];
+            tableName === table ? mainRow[fieldName] : joinRow[fieldName];
           return acc;
         }, {});
       });
   });
 }
 
-function performRightJoin(
-  mainData,
+function performRightdata(data,
   joinData,
   joinCondition,
   fields,
-  mainTable
+  table
 ) {
-  return joinData.flatMap((joinRow) => {
-    const matchingRows = mainData.filter((mainRow) => {
-      const mainValue = mainRow[joinCondition.left.split(".")[1]];
-      const joinValue = joinRow[joinCondition.right.split(".")[1]];
-      return mainValue === joinValue;
-    });
+  const rightJoinedData = performLeftJoin(
+    joinData,
+    data,
+    {
+      left: joinCondition.right,
+      right: joinCondition.left,
+    },
+    fields,
+    table
+  );
 
-    if (matchingRows.length === 0) {
-      return fields.reduce((acc, field) => {
-        const [tableName, fieldName] = field.split(".");
-        acc[field] = tableName !== mainTable ? joinRow[fieldName] : null;
-        return acc;
-      }, {});
-    }
-
-    return matchingRows.map((mainRow) => {
-      return fields.reduce((acc, field) => {
-        const [tableName, fieldName] = field.split(".");
-        acc[field] =
-          tableName === mainTable ? mainRow[fieldName] : joinRow[fieldName];
-        return acc;
-      }, {});
-    });
-  });
+  return rightJoinedData;
 }
 
-function performLeftJoin(mainData, joinData, joinCondition, fields, mainTable) {
-  return mainData.flatMap((mainRow) => {
-    const matchingRows = joinData.filter((joinRow) => {
+function performLeftJoin(data,
+  joinData,
+  joinCondition,
+  fields,
+  table) {
+  data = data.flatMap((mainRow) => {
+    const matchedJoinRows = joinData.filter((joinRow) => {
       const mainValue = mainRow[joinCondition.left.split(".")[1]];
       const joinValue = joinRow[joinCondition.right.split(".")[1]];
       return mainValue === joinValue;
     });
 
-    if (matchingRows.length === 0) {
+    if (matchedJoinRows.length === 0) {
       return fields.reduce((acc, field) => {
         const [tableName, fieldName] = field.split(".");
-        acc[field] = tableName === mainTable ? mainRow[fieldName] : null;
+        acc[field] = tableName === table ? mainRow[fieldName] : null;
         return acc;
       }, {});
     }
 
-    return matchingRows.map((joinRow) => {
+    return matchedJoinRows.map((joinRow) => {
       return fields.reduce((acc, field) => {
         const [tableName, fieldName] = field.split(".");
         acc[field] =
-          tableName === mainTable ? mainRow[fieldName] : joinRow[fieldName];
+          tableName === table ? mainRow[fieldName] : joinRow[fieldName];
         return acc;
       }, {});
     });
@@ -90,7 +80,7 @@ async function executeSELECTQuery(query) {
   const { fields, table, whereClauses, joinType, joinTable, joinCondition } = parseQuery(query);
   const data = await readCSV(`${table}.csv`);
 
-  if (joinTable && joinCondition && joinType) {
+  if (joinTable && joinCondition) {
     // Ensure joinType is not null
     const joinData = await readCSV(`${joinTable}.csv`);
     switch (joinType.toUpperCase()) {
